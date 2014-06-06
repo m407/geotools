@@ -39,6 +39,7 @@ import org.geotools.referencing.datum.DefaultEllipsoid;
 import org.geotools.referencing.datum.DefaultGeodeticDatum;
 import org.geotools.referencing.datum.DefaultPrimeMeridian;
 import org.geotools.referencing.operation.projection.AlbersEqualArea;
+import org.geotools.referencing.operation.projection.AzimuthalEquidistant;
 import org.geotools.referencing.operation.projection.LambertAzimuthalEqualArea;
 import org.geotools.referencing.operation.projection.LambertConformal;
 import org.geotools.referencing.operation.projection.MapProjection;
@@ -731,7 +732,32 @@ public final class CRS2GeoTiffMetadataAdapter {
                     return;
                 }
 		
-		// throw new
+		// /////////////////////////////////////////////////////////////////////
+                //
+                // Azimuthal Equidistant
+                //
+                // /////////////////////////////////////////////////////////////////////
+		if (projTransf instanceof AzimuthalEquidistant
+                        && name.equalsIgnoreCase("Azimuthal_Equidistant")) {
+
+                // key 3075
+                    metadata.addGeoShortParam(GeoTiffPCSCodes.ProjCoordTransGeoKey,
+                                    GeoTiffCoordinateTransformationsCodes.CT_AAzimuthalEquidistant);
+//                    metadata.addGeoAscii(GeoTiffPCSCodes.PCSCitationGeoKey, name);
+    
+                    // params
+                    metadata.addGeoDoubleParam(GeoTiffPCSCodes.ProjCenterLatGeoKey,
+                                    parameters.parameter("latitude_of_center").doubleValue());
+                    metadata.addGeoDoubleParam(GeoTiffPCSCodes.ProjCenterLongGeoKey,
+                                    parameters.parameter("longitude_of_center").doubleValue());
+                    metadata.addGeoDoubleParam(GeoTiffPCSCodes.ProjFalseEastingGeoKey,
+                                    parameters.parameter("false_easting").doubleValue());
+                    metadata.addGeoDoubleParam(GeoTiffPCSCodes.ProjFalseNorthingGeoKey,
+                                    parameters.parameter("false_northing").doubleValue());
+                    return;
+                }
+
+                // throw new
 		// GeoTiffException(null,"CRS2GeoTiffMetadataAdapter::parseCoordinateTransform::unknown
 		// projection transform");
 
