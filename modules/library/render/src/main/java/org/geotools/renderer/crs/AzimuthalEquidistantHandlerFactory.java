@@ -43,12 +43,12 @@ public class AzimuthalEquidistantHandlerFactory implements ProjectionHandlerFact
         }
         MapProjection mapProjection = CRS.getMapProjection(renderingEnvelope
                 .getCoordinateReferenceSystem());
-        if (mapProjection instanceof Az) {
+        if (mapProjection instanceof AzimuthalEquidistant) {
             ParameterValueGroup params = mapProjection.getParameterValues();
             double latitudeOfCenter = params.parameter(
-                    LambertAzimuthalEqualArea.Provider.LATITUDE_OF_CENTRE.getName().getCode()).doubleValue();
+                    AzimuthalEquidistant.Provider.LATITUDE_OF_CENTRE.getName().getCode()).doubleValue();
             double longitudeOfCenter = params.parameter(
-                    LambertAzimuthalEqualArea.Provider.LONGITUDE_OF_CENTRE.getName().getCode()).doubleValue();
+                    AzimuthalEquidistant.Provider.LONGITUDE_OF_CENTRE.getName().getCode()).doubleValue();
             
             ReferencedEnvelope validArea;
             if(latitudeOfCenter > 0) {
