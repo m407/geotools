@@ -79,12 +79,11 @@ public class AzimuthalEquidistant extends MapProjection {
     /** Constant parameters. */
     private final static double TOL = 1.e-8;
     
-    private final double N1;
-    private final double Mp;
-    private final double He;
-    private final double G;
+    private double N1;
+    private double Mp;
+    private double He;
+    private double G;
     private final double sinphi0, cosphi0;
-    private final double mapRadius = 90.0;
 
     
     /**
@@ -188,61 +187,50 @@ public class AzimuthalEquidistant extends MapProjection {
     protected Point2D transformNormalized(final double lambda, final double phi, Point2D ptDst)
             throws ProjectionException
     {
-        final double coslam = cos(lambda);
-        final double sinlam = sin(lambda);
-        final double sinphi = sin(phi);
-        double q = qsfn(sinphi);
-        final double sinb, cosb, b, c, x, y;
+       
+        double  rho, s, H, H2, c, Az, t, ct, st, cA, sA;
+        final double x, y;
+
+        double coslam = cos(lambda);
+        double cosphi = cos(phi);
+        double sinphi = sin(phi);
+        
         switch (mode) {
-            case OBLIQUE: {
-                sinb = q / qp;
-                cosb = sqrt(1.0 - sinb * sinb);
-                c    = 1.0 + sinb1 * sinb + cosb1 * cosb * coslam;
-                b    = sqrt(2.0 / c);
-                y    = ymf * b * (cosb1 * sinb - sinb1 * cosb * coslam);
-                x    = xmf * b * cosb * sinlam;
-                break;
-            }
-            case EQUATORIAL: {
-                sinb = q / qp;
-                cosb = sqrt(1.0 - sinb * sinb);
-                c    = 1.0 + cosb * coslam;
-                b    = sqrt(2.0 / c);
-                y    = ymf * b * sinb;
-                x    = xmf * b * cosb * sinlam;
-                break;
-            }
-            case NORTH_POLE: {
-                c = (PI / 2) + phi;
-                q = qp - q;
-                if (q >= 0.0) {
-                    b = sqrt(q);
-                    x = b * sinlam;
-                    y = coslam * -b;
-                } else {
-                    x = y = 0.;
-                }
-                break;
-            }
-            case SOUTH_POLE: {
-                c = phi - (PI / 2);
-                q = qp + q;
-                if (q >= 0.0) {
-                    b = sqrt(q);
-                    x = b * sinlam;
-                    y = coslam * +b;
-                } else {
-                    x = y = 0.;
-                }
-                break;
-            }
+            case NORTH_POLE:
+                    coslam = - coslam;
+            case SOUTH_POLE:
+                    x = (rho = abs(Mp - mlfn(phi, sinphi, cosphi))) *
+                            sin(lambda);
+                    y = rho * coslam;
+                    break;
+            case EQUATORIAL:  //Fall through
+            case OBLIQUE:
+                    if (abs(lambda) < EPSILON_LATITUDE && abs(phi - latitudeOfOrigin) < EPSILON_LATITUDE) {
+                            x = y = 0.0;
+                            break;
+                    }
+                    t = atan2((1 - excentricitySquared) * sinphi + excentricitySquared * N1 * sinphi0 *
+                            Math.sqrt(1. - excentricitySquared * sinphi * sinphi), cosphi);
+                    ct = cos(t); st = Math.sin(t);
+                    Az = atan2(Math.sin(lambda) * ct, cosphi0 * st - sinphi0 * coslam * ct);
+                    cA = cos(Az); sA = sin(Az);
+                    s = asin( abs(sA) < TOL ?
+                            (cosphi0 * st - sinphi0 * coslam * ct) / cA :
+                            Math.sin(lambda) * ct / sA );
+                    H = He * cA;
+                    H2 = H * H;
+                    c = N1 * s * (1. + s * s * (- H2 * (1. - H2)/6. +
+                            s * ( G * H * (1. - 2. * H2 * H2) / 8. +
+                            s * ((H2 * (4. - 7. * H2) - 3. * G * G * (1. - 7. * H2)) /
+                            120. - s * G * H / 48.))));
+                    x = c * sA;
+                    y = c * cA;
+                    break;
             default: {
                 throw new AssertionError(mode);
             }
         }
-        if (abs(c) < EPSILON_LATITUDE) {
-            throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
-        }
+
         if (ptDst != null) {
             ptDst.setLocation(x,y);
             return ptDst;
@@ -259,59 +247,40 @@ public class AzimuthalEquidistant extends MapProjection {
     protected Point2D inverseTransformNormalized(double x, double y, Point2D ptDst)
             throws ProjectionException
     {
-        final double lambda, phi;
-        switch (mode) {
-            case EQUATORIAL: // Fall through
-            case OBLIQUE: {
-                x /= dd;
-                y *= dd;
-                final double rho = hypot(x, y);
-                if (rho < FINE_EPSILON) {
-                    lambda = 0.0;
-                    phi = latitudeOfOrigin;
-                } else {
-                    double sCe, cCe, q, ab;
-                    sCe = 2.0 * asin(0.5 * rho / rq);
-                    cCe = cos(sCe);
-                    sCe = sin(sCe);
-                    x *= sCe;
-                    if (mode == OBLIQUE) {
-                        ab = cCe * sinb1 + y * sCe * cosb1 / rho;
-                        q  = qp * ab;
-                        y  = rho * cosb1 * cCe - y * sinb1 * sCe;
-                    } else {
-                        ab = y * sCe / rho;
-                        q  = qp * ab;
-                        y  = rho * cCe;
-                    }
-                    lambda = atan2(x, y);
-                    phi = authlat(asin(ab));
-                }
-                break;
-            }
-            case NORTH_POLE: {
-                y = -y;
-                // Fall through
-            }
-            case SOUTH_POLE: {
-                final double q = x*x + y*y;
-                if (q == 0) {
-                    lambda = 0.;
-                    phi = latitudeOfOrigin;
-                } else {
-                    double ab = 1.0 - q / qp;
-                    if (mode == SOUTH_POLE) {
-                        ab = -ab;
-                    }
-                    lambda = atan2(x, y);
-                    phi = authlat(asin(ab));
-                }
-                break;
-            }
-            default: {
-                throw new AssertionError(mode);
-            }
+        double lambda, phi;
+
+        double c, Az, cosAz, A, B, D, E, F, psi, t;
+
+        int i;
+
+        c = sqrt(x*x+y*y); //distance
+        
+        if ( c < EPSILON_LATITUDE) {
+                phi = latitudeOfOrigin;
+                lambda = 0.0;
+        } else if (mode == OBLIQUE || mode == EQUATORIAL) {
+                cosAz = cos(Az = atan2(x, y));
+                t = cosphi0 * cosAz;
+                B = excentricitySquared * t / (1 - excentricitySquared);
+                A = - B * t;
+                B *= 3.0 * (1.0 - A) * sinphi0;
+                D = c / N1;
+                E = D * (1.0 - D * D * (A * (1. + A) / 6. + B * (1.0 + 3.0*A) * D / 24.0));
+                F = 1.0 - E * E * (A / 2.0 + B * E / 6.0);
+                psi = asin(sinphi0 * cos(E) + t * sin(E));
+                lambda = asin(sin(Az) * sin(E) / cos(psi));
+                if ((t = abs(psi)) < EPSILON_LATITUDE)
+                        phi = 0.0;
+                else if (abs(t - PI/2) < 0.0)
+                        phi = PI/2;
+                else
+                        phi = atan((1.0 - excentricitySquared * F * sinphi0 / sin(psi)) * tan(psi) / (1 - excentricitySquared));
+        } else {
+                phi = inv_mlfn(mode == NORTH_POLE ? Mp - c : Mp + c);
+                lambda = atan2(x, mode == NORTH_POLE ? -y : y);
         }
+
+        
         if (ptDst != null) {
             ptDst.setLocation(lambda, phi);
             return ptDst;
@@ -357,55 +326,45 @@ public class AzimuthalEquidistant extends MapProjection {
             // Compute using ellipsoidal formulas, for comparaison later.
             assert (ptDst = super.transformNormalized(lambda, phi, ptDst)) != null;
 
-            final double sinphi = sin(phi);
-            final double cosphi = cos(phi);
-            final double coslam = cos(lambda);
+            double sinphi = sin(phi);
+            double cosphi = cos(phi);
+            double coslam = cos(lambda);
             double x,y;
+            
             switch (mode) {
-                case EQUATORIAL: {
-                    y = 1.0 + cosphi * coslam;
-                    if (y <= FINE_EPSILON) {
-                        throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
+                case EQUATORIAL: //Fall throughEPS10
+                case OBLIQUE:
+                    y = sin(latitudeOfOrigin) * sinphi + cos(latitudeOfOrigin) * cosphi * coslam;
+                    if (abs(abs(y) - 1.0) < TOL)
+                            if (y < 0.0)
+                                    throw new ProjectionException(); 
+                            else
+                                    x = y = 0.;
+                    else {
+                            y = acos(y);
+                            y /= sin(y);
+                            x = y * cosphi * sin(lambda);
+                            y *=  cos(latitudeOfOrigin) * sinphi - sin(latitudeOfOrigin) * cosphi * coslam;
                     }
-                    y  = sqrt(2.0 / y);
-                    x  = y * cosphi * sin(lambda);
-                    y *= sinphi;
                     break;
-                }
-                case OBLIQUE: {
-                    y = 1.0 + sinb1 * sinphi + cosb1 * cosphi * coslam;
-                    if (y <= FINE_EPSILON) {
-                        throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
-                    }
-                    y  = sqrt(2.0 / y);
-                    x  = y * cosphi * sin(lambda);
-                    y *= cosb1 * sinphi - sinb1 * cosphi * coslam;
+                case NORTH_POLE:
+                    if (abs(phi + PI/2) < EPSILON_LATITUDE)
+                            throw new ProjectionException();
+                    x = (y = (PI/2 - phi)) * sin(lambda);
+                    y *= (-coslam);
                     break;
-                }
-                case NORTH_POLE: {
-                    if (abs(phi + latitudeOfOrigin) < EPSILON_LATITUDE) {
-                        throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
-                    }
-                    y = (PI/4) - phi * 0.5;
-                    y = 2.0 * sin(y);
-                    x = y * sin(lambda);
-                    y *= -coslam;
+                case SOUTH_POLE:
+                    if (abs(phi - PI/2) < EPSILON_LATITUDE)
+                            throw new ProjectionException();
+                    x = (y = (PI/2 + phi)) * sin(lambda);
+                    y *= coslam;
                     break;
-                }
-                case SOUTH_POLE: {
-                    if (abs(phi + latitudeOfOrigin) < EPSILON_LATITUDE) {
-                        throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
-                    }
-                    y = (PI/4) - phi * 0.5;
-                    y = 2.0 * cos(y);
-                    x = y * sin(lambda);
-                    y *= +coslam;
-                    break;
-                }
                 default: {
                     throw new AssertionError(mode);
                 }
+
             }
+
             assert checkTransform(x, y, ptDst);
             if (ptDst != null) {
                 ptDst.setLocation(x,y);
@@ -426,46 +385,49 @@ public class AzimuthalEquidistant extends MapProjection {
             assert (ptDst = super.inverseTransformNormalized(x, y, ptDst)) != null;
 
             double lambda, phi;
-            final double rh = hypot(x, y);
-            phi = rh * 0.5;
-            if (phi > 1.0) {
-                throw new ProjectionException(ErrorKeys.TOLERANCE_ERROR);
-            }
-            phi = 2.0 * asin(phi);
-            switch (mode) {
-                case EQUATORIAL: {
-                    final double sinz = sin(phi);
-                    final double cosz = cos(phi);
-                    phi = abs(rh) <= FINE_EPSILON ? 0.0 : asin(y * sinz / rh);
-                    x *= sinz;
-                    y = cosz * rh;
-                    lambda = (y == 0) ? 0.0 : atan2(x, y);
-                    break;
-                }
-                case OBLIQUE: {
-                    final double sinz = sin(phi);
-                    final double cosz = cos(phi);
-                    phi = abs(rh) <= FINE_EPSILON ? latitudeOfOrigin :
-                            asin(cosz * sinb1 + y * sinz * cosb1 / rh);
-                    x *= sinz * cosb1;
-                    y = (cosz - sin(phi) * sinb1) * rh;
-                    lambda = (y == 0) ? 0.0 : atan2(x, y);
-                    break;
-                }
-                case NORTH_POLE: {
-                    phi = (PI / 2) - phi;
+            
+            double cosc, c_rh, sinc;
+            
+            c_rh = sqrt(x*x+y*y); //distance
+            
+            if ( c_rh > PI) {
+                    if (c_rh - EPSILON_LATITUDE > PI)
+                            throw new ProjectionException(); 
+                    c_rh = PI;
+            } else if (c_rh < EPSILON_LATITUDE) {
+                    phi = latitudeOfOrigin;
+                    lambda = 0.0;
+                    
+                    assert checkInverseTransform(lambda, phi, ptDst);
+                    if (ptDst != null) {
+                        ptDst.setLocation(lambda, phi);
+                        return ptDst;
+                    }
+                    return new Point2D.Double(lambda, phi);
+            } 
+            
+            if (mode == OBLIQUE || mode == EQUATORIAL) {
+                    sinc = sin(c_rh);
+                    cosc = cos(c_rh);
+                    if (mode == EQUATORIAL) {
+                            phi = asin(y * sinc / c_rh);
+                            x *= sinc;
+                            y = cosc * c_rh;
+                    } else {
+                            phi = asin(cosc * sin(latitudeOfOrigin) + y * sinc * cos(latitudeOfOrigin) /
+                                    c_rh);
+                            y = (cosc - sin(latitudeOfOrigin) * sin(phi)) * c_rh;
+                            x *= sinc * cos(latitudeOfOrigin);
+                    }
+                    lambda = y == 0.0 ? 0.0 : atan2(x, y);
+            } else if (mode == NORTH_POLE) {
+                    phi = PI/2 - c_rh;
                     lambda = atan2(x, -y);
-                    break;
-                }
-                case SOUTH_POLE: {
-                    phi -= (PI / 2);
+            } else {
+                    phi = c_rh - PI/2;
                     lambda = atan2(x, y);
-                    break;
-                }
-                default: {
-                    throw new AssertionError(mode);
-                }
             }
+
             assert checkInverseTransform(lambda, phi, ptDst);
             if (ptDst != null) {
                 ptDst.setLocation(lambda, phi);
